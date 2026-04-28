@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Better-Been · Web Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --visited:   #B8E0D2;
+    --wishlist:  #FAD4C0;
+    --unvisited: #F4F4F2;
+    --border:    #D9D9D9;
+    --accent:    #6C8EBF;
+    --ink:       #1F2933;
+    --muted:     #6B7280;
+    --surface:   #FAFAF7;
+    --canvas:    #ECEAE3;
+    --shadow:    0 12px 32px -16px rgba(31, 41, 51, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Manrope', -apple-system, sans-serif;
+    background: var(--canvas);
+    color: var(--ink);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Layout */
+  .app {
+    height: 100vh;
+    max-width: 920px;
+    margin: 0 auto;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  @media (min-width: 921px) {
+    body { padding: 24px 0; }
+    .app {
+      height: calc(100vh - 48px);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+  }
+
+  /* Top bar */
+  .topbar {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .topbar h1 {
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+  }
+  .topbar h1 span { color: var(--accent); }
+
+  .segmented {
+    display: inline-flex;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 3px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .segmented button {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 7px;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+  }
+  .segmented button.active {
+    background: var(--ink);
+    color: white;
+  }
+
+  /* Tabs */
+  .tab { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .tab.active { display: flex; }
+
+  /* ─── Map tab ─── */
+  #map { flex: 1; background: var(--canvas); }
+  .leaflet-container { background: #E5EDF7; font-family: inherit; }
+  .leaflet-popup-content-wrapper { border-radius: 12px; }
+
+  .stats {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .stat {
+    flex: 1;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .stat .num { font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
+  .stat .sub { font-size: 11px; font-weight: 700; color: var(--ink); margin-top: 1px; letter-spacing: -0.01em; }
+  .stat .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stat.visited  .num { color: #2E7D5B; }
+  .stat.wishlist .num { color: #B14A3E; }
+
+  .legend {
+    position: absolute;
+    bottom: 100px;
+    left: 16px;
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 12px;
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    z-index: 500;
+    pointer-events: none;
+  }
+
+  .map-mode {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 10px 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 500;
+    box-shadow: 0 8px 24px -12px rgba(31, 41, 51, 0.25);
+    display: none;
+  }
+  .map-mode.show { display: flex; }
+  .map-mode .mode-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .mode-seg {
+    padding: 2px;
+  }
+  .mode-seg button {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  @media (max-width: 480px) {
+    .map-mode .mode-label { display: none; }
+  }
+  .legend .dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+    border: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  .toast {
+    position: absolute;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s ease;
+    z-index: 600;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ─── Splitter tab ─── */
+  .splitter {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .trip-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .trip-name {
+    font-weight: 800;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    background: transparent;
+    border: none;
+    flex: 1;
+    color: var(--ink);
+    font-family: inherit;
+  }
+  .trip-name:focus { outline: 2px solid var(--accent); border-radius: 6px; padding: 0 4px; }
+  .trip-action-btn {
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 4px 4px -8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section-title .ghost-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .section-title .ghost-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .row {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .icon {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .row .body { flex: 1; min-width: 0; }
+  .row .body .t {
+    font-weight: 600;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .row .body .s {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .row .amt {
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
+  }
+  .row .del {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .row .del:hover { background: var(--unvisited); color: var(--ink); }
+
+  .ic-mint   { background: var(--visited);  color: var(--ink); }
+  .ic-peach  { background: var(--wishlist); color: var(--ink); }
+  .ic-blue   { background: #DCE5F2; color: var(--accent); }
+  .ic-grey   { background: var(--unvisited); color: var(--ink); }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 24px 16px;
+    font-size: 13px;
+  }
+
+  .add-member {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .add-member input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 14px;
+    background: var(--surface);
+  }
+  .add-member input:focus { outline: 2px solid var(--accent); }
+  .add-member button {
+    background: var(--ink);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0 16px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* FAB */
+  .fab {
+    position: absolute;
+    right: 24px;
+    bottom: 100px;
+    background: var(--ink);
+    color: white;
+    border: none;
+    padding: 14px 20px;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 16px 32px -12px rgba(31, 41, 51, 0.45);
+    z-index: 400;
+  }
+  .fab:active { transform: scale(0.97); }
+
+  /* Bottom nav */
+  .navbar {
+    height: 72px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    padding: 8px 16px;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .nav-item.active { color: var(--ink); }
+  .nav-item .glyph {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    font-size: 16px;
+  }
+  .nav-item.active .glyph { background: var(--ink); color: white; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(31, 41, 51, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    width: 100%;
+    max-width: 480px;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 32px;
+    transform: translateY(0);
+    animation: slideUp 0.25s ease;
+  }
+  @media (min-width: 600px) {
+    .modal-backdrop { align-items: center; }
+    .modal { border-radius: 24px; margin: 0 16px; }
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal h3 {
+    font-weight: 800;
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font: inherit;
+    font-size: 15px;
+    background: white;
+    color: var(--ink);
+  }
+  .field input:focus, .field select:focus { outline: 2px solid var(--accent); }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .modal-actions button {
+    flex: 1;
+    padding: 14px;
+    border-radius: 12px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-cancel {
+    background: transparent;
+    border: 1px solid var(--border) !important;
+    color: var(--muted);
+  }
+  .btn-save { background: var(--ink); color: white; }
+
+  /* Loader */
+  .loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    z-index: 800;
+    flex-direction: column;
+    gap: 16px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .loader.hidden { display: none; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── Total card on main splitter view ─── */
+  .total-card .split-btn {
+    background: var(--ink);
+    color: white;
+    border: none;
+    border-radius: 999px;
+    padding: 9px 16px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+  }
+  .total-card .split-btn:hover:not(:disabled) {
+    background: var(--accent);
+    transform: translateX(2px);
+  }
+  .total-card .split-btn:disabled {
+    background: var(--unvisited);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+  .total-card .icon { background: #DCE5F2; color: var(--accent); font-size: 18px; }
+  .total-card .body .t { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+
+  /* ─── Split screen overlay ─── */
+  .split-screen {
+    position: absolute;
+    inset: 0;
+    background: var(--surface);
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    visibility: hidden;
+  }
+  .split-screen.show {
+    transform: translateY(0);
+    visibility: visible;
+  }
+  .split-header {
+    padding: 16px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .split-header h2 {
+    font-weight: 800;
+    font-size: 20px;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+  .back-btn, .equal-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .back-btn:hover, .equal-btn:hover { background: var(--unvisited); }
+
+  .split-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .big-total {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px 16px;
+    text-align: center;
+  }
+  .big-total-amount {
+    font-weight: 800;
+    font-size: 40px;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .big-total-label {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+
+  .pct-row {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pct-row:last-child { border-bottom: none; }
+  .pct-row .body { flex: 1; min-width: 0; }
+  .pct-row .body .t {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .pct-row .body .s {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .pct-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px 10px 4px 4px;
+  }
+  .pct-input-wrap:focus-within { outline: 2px solid var(--accent); }
+  .pct-input {
+    width: 56px;
+    border: none;
+    background: transparent;
+    padding: 6px 4px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    text-align: right;
+    color: var(--ink);
+  }
+  .pct-input:focus { outline: none; }
+  .pct-input::-webkit-inner-spin-button,
+  .pct-input::-webkit-outer-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .pct-suffix {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .sum-indicator {
+    text-align: center;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 13px;
+    background: var(--visited);
+    color: #1F5A41;
+    border: 1px solid #9BCBB5;
+    transition: all 0.2s ease;
+  }
+  .sum-indicator.invalid {
+    background: var(--wishlist);
+    color: #8C3624;
+    border-color: #E8B299;
+  }
+  .auto-norm-btn {
+    background: #8C3624;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 4px 10px;
+    margin-left: 8px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .auto-norm-btn:hover { background: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ─────────── Top bar ─────────── -->
+  <header class="topbar">
+    <h1>Better<span>·</span>Been</h1>
+    <div id="level-controls" class="segmented" style="display:none">
+      <button data-level="country" class="active">Länder</button>
+      <button data-level="subdivision">Regionen</button>
+    </div>
+  </header>
+
+  <!-- ─────────── Tab 1: Map ─────────── -->
+  <section class="tab active" id="tab-map">
+    <div class="stats">
+      <div class="stat visited">
+        <div class="num" id="stat-visited">0</div>
+        <div class="label">besucht</div>
+      </div>
+      <div class="stat wishlist">
+        <div class="num" id="stat-wishlist">0</div>
+        <div class="label">wunsch</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-coverage">0 %</div>
+        <div class="sub" id="stat-coverage-sub">0/0</div>
+        <div class="label" id="stat-coverage-label">der welt</div>
+      </div>
+    </div>
+    <div id="map" style="position: relative;">
+      <div class="map-mode" id="mode-controls">
+        <span class="mode-label">Klick markiert als</span>
+        <div class="segmented mode-seg">
+          <button data-mode="visited" class="active">Besucht</button>
+          <button data-mode="wishlist">Wunsch</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--visited)"></span>Besucht</span>
+        <span><span class="dot" style="background:var(--wishlist)"></span>Wunsch</span>
+      </div>
+      <div class="toast" id="toast"></div>
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <div>Karte wird geladen…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── Tab 2: Splitter ─────────── -->
+  <section class="tab" id="tab-splitter">
+    <div class="splitter">
+      <div class="trip-header">
+        <input type="text" class="trip-name" id="trip-name" value="Italien 2026">
+        <button class="ghost-btn trip-action-btn" id="trip-export-btn" title="Trip als JSON-Datei exportieren">↓ Export</button>
+        <button class="ghost-btn trip-action-btn" id="trip-import-btn" title="Trip aus JSON importieren">↑ Import</button>
+      </div>
+
+      <div class="section-title">
+        <span>Reisende</span>
+      </div>
+      <div class="card" id="members-card">
+        <!-- member rows injected -->
+      </div>
+
+      <div class="card total-card">
+        <div class="row">
+          <div class="icon ic-blue">∑</div>
+          <div class="body">
+            <div class="t" id="total-amount">€0,00</div>
+            <div class="s"><span id="total-count">0</span> Ausgaben gesammelt</div>
+          </div>
+          <button class="split-btn" id="open-split-btn" disabled>Splitten →</button>
+        </div>
+      </div>
+
+      <div class="section-title">
+        <span>Ausgaben</span>
+        <button class="ghost-btn" id="reset-trip">Zurücksetzen</button>
+      </div>
+      <div class="card" id="expenses-card">
+        <div class="empty">Tippe auf <strong>＋ Ausgabe</strong> unten rechts.</div>
+      </div>
+
+      <div style="height: 80px"></div>
+    </div>
+
+    <button class="fab" id="add-expense-btn">＋ Ausgabe</button>
+  </section>
+
+  <!-- ─────────── Modal: Import trip ─────────── -->
+  <div class="modal-backdrop" id="import-modal">
+    <div class="modal">
+      <h3>Trip importieren</h3>
+      <div class="field">
+        <label>JSON einfügen</label>
+        <textarea id="import-json" rows="8" style="width:100%; border:1px solid var(--border); border-radius:10px; padding:12px; font-family: ui-monospace, monospace; font-size: 12px; background: white; resize: vertical;"></textarea>
+      </div>
+      <div style="font-size: 12px; color: var(--muted); margin-top: -6px; margin-bottom: 14px;">
+        Achtung: ersetzt den aktuellen Trip komplett.
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="import-cancel">Abbrechen</button>
+        <button class="btn-save" id="import-save">Übernehmen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────── Modal: Add expense ─────────── -->
+  <div class="modal-backdrop" id="expense-modal">
+    <div class="modal">
+      <h3>Neue Ausgabe</h3>
+      <div class="field">
+        <label>Betrag (EUR)</label>
+        <input type="number" id="exp-amount" step="0.01" min="0.01" placeholder="0,00">
+      </div>
+      <div class="field">
+        <label>Bezahlt von</label>
+        <select id="exp-payer"></select>
+      </div>
+      <div class="field">
+        <label>Beschreibung</label>
+        <input type="text" id="exp-desc" placeholder="z.B. Pizza in Rom">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="exp-cancel">Abbrechen</button>
+        <button class="btn-save" id="exp-save">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────── Split screen ─────────── -->
+  <div class="split-screen" id="split-screen">
+    <header class="split-header">
+      <button class="back-btn" id="close-split-btn">← Zurück</button>
+      <h2>Aufteilen</h2>
+      <button class="equal-btn" id="equal-split-btn">Gleichmäßig</button>
+    </header>
+
+    <div class="split-body">
+      <div class="big-total">
+        <div class="big-total-amount" id="split-total">€0,00</div>
+        <div class="big-total-label">total auf <span id="split-count">0</span> Ausgaben</div>
+      </div>
+
+      <div class="section-title"><span>Anteile festlegen</span></div>
+      <div class="card" id="pct-card"></div>
+
+      <div class="sum-indicator" id="sum-indicator">Summe: 100% ✓</div>
+
+      <div class="section-title"><span>Wer schuldet wem</span></div>
+      <div class="card" id="settlements-card"><div class="empty">–</div></div>
+
+      <div style="height: 24px"></div>
+    </div>
+  </div>
+
+  <!-- ─────────── Bottom nav ─────────── -->
+  <nav class="navbar">
+    <button class="nav-item active" data-tab="map">
+      <span class="glyph">🌐</span>
+      <span>Karte</span>
+    </button>
+    <button class="nav-item" data-tab="splitter">
+      <span class="glyph">⊟</span>
+      <span>Splitter</span>
+    </button>
+  </nav>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""></script>
+<script>
+// ───────────────────────── Storage ─────────────────────────
+const LS_MAP   = 'better-been:map-status:v1';
+const LS_TRIP  = 'better-been:trip:v1';
+
+let mapStatus = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
+let mode      = 'visited'; // visited | wishlist
+let trip      = JSON.parse(localStorage.getItem(LS_TRIP)) || {
+  name: 'Italien 2026',
+  members: [
+    { id: 'm1', name: 'Tom'  },
+    { id: 'm2', name: 'Anna' },
+    { id: 'm3', name: 'Luca' },
+  ],
+  expenses: [],
+  percentages: {},
+};
+if (!trip.percentages) trip.percentages = {};
+
+const saveMap  = () => localStorage.setItem(LS_MAP, JSON.stringify(mapStatus));
+const saveTrip = () => localStorage.setItem(LS_TRIP, JSON.stringify(trip));
+
+// ───────────────────────── Tabs ─────────────────────────
+const $$ = sel => document.querySelectorAll(sel);
+const $  = sel => document.querySelector(sel);
+
+$$('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    $$('.nav-item').forEach(n => n.classList.toggle('active', n === btn));
+    $$('.tab').forEach(t => t.classList.toggle('active', t.id === `tab-${tab}`));
+    const showMapCtrls = tab === 'map';
+    $('#level-controls').style.display = showMapCtrls ? 'inline-flex' : 'none';
+    $('#mode-controls').classList.toggle('show', showMapCtrls);
+    if (showMapCtrls && map) setTimeout(() => map.invalidateSize(), 50);
+    if (showMapCtrls) closeSplitScreen();
+  });
+});
+
+// ───────────────────────── Map ─────────────────────────
+// Canvas-Renderer: massiver Performance-Gewinn bei den ~4500 Polygonen der
+// 10m-Subdivisions im Vergleich zum Default-SVG-Renderer.
+const map = L.map('map', {
+  zoomControl: true,
+  worldCopyJump: true,
+  renderer: L.canvas({ padding: 0.5 }),
+}).setView([25, 10], 2);
+
+// CartoDB Positron — base ohne Labels, damit Polygone darüber liegen können
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap, © CartoDB',
+  subdomains: 'abcd',
+  maxZoom: 8, minZoom: 2,
+}).addTo(map);
+
+// Eigene Pane für Labels: über Polygonen, unter Tooltips. So sind Städte-/Ländernamen
+// auch über mint/peach-gefärbten Ländern noch klar lesbar.
+map.createPane('labels');
+map.getPane('labels').style.zIndex = 650;
+map.getPane('labels').style.pointerEvents = 'none';
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+  attribution: '',
+  subdomains: 'abcd',
+  maxZoom: 8, minZoom: 2,
+  pane: 'labels',
+}).addTo(map);
+
+let level = 'country';                  // 'country' | 'subdivision'
+let layers = { country: null, subdivision: null, countryOutline: null };
+let dataCache = { country: null, subdivision: null };
+let totals = { country: 0, subdivision: 0 };
+
+// Fallback-Chain pro Layer: erst lokale committete Files probieren (schnell wenn
+// auf GitHub Pages), dann CDN. Bei file:// wird local übersprungen, weil Chrome
+// fetch zu relativen Pfaden aus file:// blockt.
+const _isLocalFile = location.protocol === 'file:';
+const GEO_URLS = {
+  country: [
+    'data/countries.geojson',
+    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_map_subunits.geojson',
+  ],
+  subdivision: [
+    'data/subdivisions.geojson',
+    // jsdelivr blockt bei >20 MB → raw.githubusercontent.com für 10m
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson',
+  ],
+};
+
+function codeOf(feature, lvl) {
+  const p = feature.properties;
+  if (lvl === 'country') {
+    // ISO_A2 kann '-99' sein für Kosovo, N. Cyprus etc. → ISO_A2_EH als Fallback
+    const raw = p.ISO_A2 || p.iso_a2;
+    let iso2 = (raw && raw !== '-99') ? raw : (p.ISO_A2_EH || p.iso_a2_eh);
+    if (!iso2 || iso2 === '-99') iso2 = (p.SOV_A3 || p.sov_a3 || 'XX').slice(0, 2);
+    // SU_DIF=1 → Subunit (z.B. England in UK, Greenland in DK).
+    // Eindeutiger Composite-Key: GB-ENG, GB-SCT, GL-GRL, HK-HKG …
+    // Vorteil: matcht beim Wechsel zu Regionen den ISO 3166-2 Code (GB-ENG).
+    const isSubunit = Number(p.SU_DIF) === 1;
+    return isSubunit ? `${iso2}-${p.SU_A3}` : iso2;
+  }
+  // subdivisions: ISO 3166-2 ist die schönste Form, aber nicht jede Region hat
+  // eine. Fallback auf HASC, GeoNames-ID, oder synthetisch aus Parent+Name.
+  let code = p.iso_3166_2 || p.code_hasc;
+  if (!code || code === '' || code.endsWith('~')) {
+    const parent = (p.iso_a2 || p.adm0_a3 || 'XX').toUpperCase();
+    const slug = (p.name_en || p.name || 'unknown')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    code = `${parent}-${slug}`;
+  }
+  return code;
+}
+function nameOf(feature) {
+  const p = feature.properties;
+  // Subunits: SUBUNIT (z.B. "England") statt ADMIN ("United Kingdom")
+  if (Number(p.SU_DIF) === 1 && (p.SUBUNIT || p.subunit)) {
+    return p.SUBUNIT || p.subunit;
+  }
+  return p.ADMIN || p.NAME || p.name || p.name_en || '';
+}
+
+// ─── Geodesic polygon area (km²) — Turf.js-style spherical excess ───
+const featureAreas = new Map();   // code -> km²
+let totalWorldArea = 0;
+const toRad = d => d * Math.PI / 180;
+
+function ringArea(coords) {
+  if (coords.length < 3) return 0;
+  const R = 6378137; // WGS84 mean radius (m)
+  let area = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p1 = coords[i];
+    const p2 = coords[(i + 1) % coords.length];
+    const p3 = coords[(i + 2) % coords.length];
+    area += (toRad(p3[0]) - toRad(p1[0])) * Math.sin(toRad(p2[1]));
+  }
+  return Math.abs(area * R * R / 2);
+}
+function geometryAreaKm2(geom) {
+  if (!geom) return 0;
+  const polyArea = poly => {
+    let a = ringArea(poly[0]);
+    for (let i = 1; i < poly.length; i++) a -= ringArea(poly[i]);
+    return a;
+  };
+  let m2 = 0;
+  if (geom.type === 'Polygon') m2 = polyArea(geom.coordinates);
+  else if (geom.type === 'MultiPolygon') m2 = geom.coordinates.reduce((s, p) => s + polyArea(p), 0);
+  return m2 / 1e6;
+}
+
+function worldCoveragePercent(status) {
+  if (!totalWorldArea) return 0;
+  // Country marks shadow their subdivisions — don't double-count
+  const sameLevelCountries = new Set(
+    Object.keys(mapStatus).filter(k => !k.includes('-') && mapStatus[k] === status),
+  );
+  let area = 0;
+  for (const code in mapStatus) {
+    if (mapStatus[code] !== status) continue;
+    const a = featureAreas.get(code);
+    if (!a) continue;
+    if (code.includes('-')) {
+      const parent = code.slice(0, code.indexOf('-'));
+      if (sameLevelCountries.has(parent)) continue; // parent already counted
+    }
+    area += a;
+  }
+  return (area / totalWorldArea) * 100;
+}
+function formatPct(p) {
+  if (p < 0.05) return '0 %';
+  if (p < 9.95) return p.toFixed(1) + ' %';
+  return Math.round(p) + ' %';
+}
+
+function statusColor(status) {
+  if (status === 'visited')  return '#B8E0D2';
+  if (status === 'wishlist') return '#FAD4C0';
+  return '#F4F4F2';
+}
+
+function styleFor(lvl) {
+  const baseWeight = lvl === 'subdivision' ? 0.4 : 0.6;
+  return feature => ({
+    fillColor: statusColor(mapStatus[codeOf(feature, lvl)]),
+    weight: baseWeight,
+    color: '#D9D9D9',
+    fillOpacity: 0.9,
+  });
+}
+
+function showToast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+function refreshStats() {
+  const isCountry = level === 'country';
+  const isLevelKey = code => isCountry ? !code.includes('-') : code.includes('-');
+  const codes = Object.keys(mapStatus).filter(isLevelKey);
+  const v = codes.filter(c => mapStatus[c] === 'visited').length;
+  const w = codes.filter(c => mapStatus[c] === 'wishlist').length;
+  const total = totals[level] || 0;
+
+  $('#stat-visited').textContent  = total ? `${v}/${total}` : `${v}`;
+  $('#stat-wishlist').textContent = total ? `${w}/${total}` : `${w}`;
+
+  // Welt = Fläche % | Länder %
+  const areaPct = worldCoveragePercent('visited');
+  const visitedCountries = Object.keys(mapStatus)
+    .filter(c => !c.includes('-') && mapStatus[c] === 'visited').length;
+  const countryPct = totals.country
+    ? (visitedCountries / totals.country) * 100
+    : 0;
+  $('#stat-coverage').textContent = `${formatPct(areaPct)} | ${formatPct(countryPct)}`;
+  $('#stat-coverage-sub').textContent = 'Fläche · Länder';
+  $('#stat-coverage-label').textContent = 'der welt';
+}
+
+function onFeatureClick(e, lvl) {
+  const code = codeOf(e.target.feature, lvl);
+  const name = nameOf(e.target.feature);
+  if (!code || code === '-99') return;
+
+  if (mapStatus[code] === mode) {
+    delete mapStatus[code];
+    showToast(`${name} entfernt`);
+  } else {
+    mapStatus[code] = mode;
+    showToast(`${name} → ${mode === 'visited' ? 'besucht' : 'wunsch'}`);
+  }
+  saveMap();
+  e.target.setStyle(styleFor(lvl)(e.target.feature));
+  refreshStats();
+}
+
+function buildLayer(data, lvl) {
+  const styled = styleFor(lvl);
+  const baseWeight = lvl === 'subdivision' ? 0.4 : 0.6;
+  return L.geoJSON(data, {
+    style: styled,
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(nameOf(feature), { sticky: true });
+      layer.on('click', e => onFeatureClick(e, lvl));
+      layer.on('mouseover', () => layer.setStyle({ weight: 1.5, color: '#6C8EBF' }));
+      layer.on('mouseout',  () => layer.setStyle({ weight: baseWeight, color: '#D9D9D9' }));
+    },
+  });
+}
+
+async function loadLevel(target) {
+  if (dataCache[target]) return dataCache[target];
+  $('#loader').innerHTML = '<div class="spinner"></div><div></div>';
+  $('#loader').classList.remove('hidden');
+  $('#loader').querySelector('div + div').textContent =
+    target === 'country'
+      ? 'Karte wird geladen…'
+      : 'Detaillierte Regionen werden geladen — beim 1. Mal etwas Geduld, danach gecached…';
+
+  // Fallback-Chain durchgehen
+  const urls = GEO_URLS[target];
+  let data = null, lastErr;
+  for (const url of urls) {
+    // Local files aus file:// nicht versuchen (Chrome blockt)
+    if (_isLocalFile && !url.startsWith('http')) continue;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) { lastErr = new Error(`HTTP ${r.status} for ${url}`); continue; }
+      data = await r.json();
+      break;
+    } catch (e) { lastErr = e; }
+  }
+  if (!data) throw lastErr || new Error('Keine Quelle erreichbar');
+  // Country-Layer: Dependencies (Bermuda, Falklands…) und Disputed (Kosovo,
+  // N. Cyprus…) rausfiltern — sonst explodiert der Nenner über 270.
+  // Bleibt: 'Sovereign country' + 'Country' (UK-Subunits, Greenland etc.) ≈ 200.
+  if (target === 'country') {
+    data.features = data.features.filter(f => {
+      const t = f.properties.TYPE || f.properties.type;
+      return t === 'Sovereign country' || t === 'Country';
+    });
+  }
+  dataCache[target] = data;
+  // compute + cache area per feature
+  let levelTotal = 0;
+  for (const f of data.features) {
+    const code = codeOf(f, target);
+    if (!code || code === '-99') continue;
+    const a = geometryAreaKm2(f.geometry);
+    featureAreas.set(code, a);
+    levelTotal++;
+  }
+  totals[target] = levelTotal;
+  if (target === 'country') {
+    totalWorldArea = data.features.reduce((s, f) => {
+      const c = codeOf(f, 'country');
+      return c && c !== '-99' ? s + (featureAreas.get(c) || 0) : s;
+    }, 0);
+  }
+  return data;
+}
+
+async function showLevel(target) {
+  level = target;
+  if (layers.country)        map.removeLayer(layers.country);
+  if (layers.subdivision)    map.removeLayer(layers.subdivision);
+  if (layers.countryOutline) map.removeLayer(layers.countryOutline);
+
+  try {
+    if (target === 'country') {
+      const data = await loadLevel('country');
+      if (!layers.country) layers.country = buildLayer(data, 'country');
+      layers.country.addTo(map);
+    } else {
+      const subData = await loadLevel('subdivision');
+      const cntData = await loadLevel('country');
+      if (!layers.subdivision) layers.subdivision = buildLayer(subData, 'subdivision');
+      layers.subdivision.addTo(map);
+      // Länder-Umrisse als Overlay (nicht klickbar) für Orientierung
+      if (!layers.countryOutline) {
+        layers.countryOutline = L.geoJSON(cntData, {
+          style: { fill: false, color: '#1F2933', weight: 1.2, opacity: 0.45 },
+          interactive: false,
+        });
+      }
+      layers.countryOutline.addTo(map);
+    }
+    $('#loader').classList.add('hidden');
+    refreshStats();
+  } catch (err) {
+    console.error(err);
+    const loader = $('#loader');
+    loader.innerHTML =
+      '<div style="text-align:center; padding:0 24px; max-width: 320px">' +
+      '<strong style="display:block; margin-bottom:8px">Konnte nicht geladen werden.</strong>' +
+      '<small style="color:var(--muted); display:block; margin-bottom:16px">Internetverbindung prüfen.</small>' +
+      '<button id="retry-btn" style="background:var(--ink); color:white; border:none; border-radius:10px; padding:10px 20px; font-weight:700; cursor:pointer">Erneut versuchen</button>' +
+      '</div>';
+    loader.classList.remove('hidden');
+    $('#retry-btn').addEventListener('click', () => {
+      delete dataCache[target];
+      showLevel(target);
+    });
+  }
+}
+
+// initial load
+showLevel('country').then(() => {
+  $('#level-controls').style.display = 'inline-flex';
+  $('#mode-controls').classList.add('show');
+  // Wenn Regionen-Marks aus früherer Session existieren, im Hintergrund nachladen
+  // damit die Welt-Coverage stimmt — User merkt nichts davon.
+  const hasSubMarks = Object.keys(mapStatus).some(c => c.includes('-'));
+  if (hasSubMarks) {
+    loadLevel('subdivision').then(refreshStats).catch(() => {});
+  }
+});
+
+// Level toggle (country / subdivision)
+$$('#level-controls button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('active')) return;
+    $$('#level-controls button').forEach(b => b.classList.toggle('active', b === btn));
+    showLevel(btn.dataset.level);
+  });
+});
+
+// Mode toggle (visited / wishlist) — floating on map
+$$('#mode-controls button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('#mode-controls button').forEach(b => b.classList.toggle('active', b === btn));
+    mode = btn.dataset.mode;
+  });
+});
+
+// ───────────────────────── Splitter ─────────────────────────
+function uid() { return 'x' + Math.random().toString(36).slice(2, 9); }
+
+function renderMembers() {
+  const card = $('#members-card');
+  const rows = trip.members.map(m => `
+    <div class="row">
+      <div class="icon ic-blue">${m.name.charAt(0).toUpperCase()}</div>
+      <div class="body">
+        <div class="t">${escapeHtml(m.name)}</div>
+      </div>
+      ${trip.members.length > 1 ? `<button class="del" data-rm="${m.id}">✕</button>` : ''}
+    </div>
+  `).join('');
+  card.innerHTML = rows + `
+    <div class="add-member">
+      <input id="new-member" type="text" placeholder="Name hinzufügen…" maxlength="20">
+      <button id="add-member-btn">+</button>
+    </div>
+  `;
+  card.querySelectorAll('[data-rm]').forEach(b => {
+    b.addEventListener('click', () => removeMember(b.dataset.rm));
+  });
+  $('#add-member-btn').addEventListener('click', addMember);
+  $('#new-member').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addMember();
+  });
+}
+
+function addMember() {
+  const inp = $('#new-member');
+  const name = inp.value.trim();
+  if (!name) return;
+  trip.members.push({ id: uid(), name });
+  trip.percentages = equalPercentages();
+  saveTrip();
+  renderAll();
+}
+
+function removeMember(id) {
+  if (trip.expenses.some(e => e.payer === id)) {
+    if (!confirm('Diese Person hat Ausgaben — wirklich entfernen? Ausgaben bleiben dem Trip erhalten, aber die Bilanz stimmt evtl. nicht mehr.')) return;
+  }
+  trip.members = trip.members.filter(m => m.id !== id);
+  trip.percentages = equalPercentages();
+  saveTrip();
+  renderAll();
+}
+
+function equalPercentages() {
+  const n = trip.members.length;
+  if (n === 0) return {};
+  const each = +(100 / n).toFixed(2);
+  const result = Object.fromEntries(trip.members.map(m => [m.id, each]));
+  // fix rounding so total = 100
+  const sum = Object.values(result).reduce((a, b) => a + b, 0);
+  result[trip.members[0].id] = +(result[trip.members[0].id] + (100 - sum)).toFixed(2);
+  return result;
+}
+
+function effectivePercentages() {
+  const pcts = trip.percentages || {};
+  const allPresent = trip.members.length > 0 &&
+    trip.members.every(m => typeof pcts[m.id] === 'number');
+  return allPresent ? pcts : equalPercentages();
+}
+
+function totalSpent() {
+  return trip.expenses.reduce((s, e) => s + e.amount, 0);
+}
+
+function balances() {
+  const result = Object.fromEntries(trip.members.map(m => [m.id, 0]));
+  if (trip.members.length === 0) return result;
+  const pcts = effectivePercentages();
+  trip.expenses.forEach(e => {
+    trip.members.forEach(m => {
+      result[m.id] -= e.amount * (pcts[m.id] || 0) / 100;
+    });
+    if (result[e.payer] !== undefined) result[e.payer] += e.amount;
+  });
+  return result;
+}
+
+function simplify(bals) {
+  const creditors = [], debtors = [];
+  Object.entries(bals).forEach(([id, b]) => {
+    if (b > 0.01)  creditors.push({ id, amt: b });
+    if (b < -0.01) debtors.push({ id, amt: -b });
+  });
+  creditors.sort((a, b) => b.amt - a.amt);
+  debtors.sort((a, b) => b.amt - a.amt);
+  const res = [];
+  let i = 0, j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const pay = Math.min(debtors[i].amt, creditors[j].amt);
+    res.push({ from: debtors[i].id, to: creditors[j].id, amt: pay });
+    debtors[i].amt -= pay;
+    creditors[j].amt -= pay;
+    if (debtors[i].amt < 0.01) i++;
+    if (creditors[j].amt < 0.01) j++;
+  }
+  return res;
+}
+
+function renderTotalCard() {
+  $('#total-amount').textContent = money(totalSpent());
+  $('#total-count').textContent = trip.expenses.length;
+  const btn = $('#open-split-btn');
+  const ready = trip.expenses.length > 0 && trip.members.length >= 2;
+  btn.disabled = !ready;
+}
+
+function renderSplitScreen() {
+  const total = totalSpent();
+  $('#split-total').textContent = money(total);
+  $('#split-count').textContent = trip.expenses.length;
+
+  const pcts = effectivePercentages();
+  const card = $('#pct-card');
+  card.innerHTML = trip.members.map(m => {
+    const p = pcts[m.id] || 0;
+    const share = total * p / 100;
+    return `
+      <div class="pct-row" data-row="${m.id}">
+        <div class="icon ic-blue">${m.name.charAt(0).toUpperCase()}</div>
+        <div class="body">
+          <div class="t">${escapeHtml(m.name)}</div>
+          <div class="s">trägt ${money(share)}</div>
+        </div>
+        <div class="pct-input-wrap">
+          <input class="pct-input" type="number" min="0" max="100" step="0.5"
+                 value="${p}" data-member="${m.id}">
+          <span class="pct-suffix">%</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Debounce der schwereren Operationen (Sum-Update + Settlement-Recompute)
+  // damit das Tippen nicht ruckelt — pro Zeile sind die Share-Texte sofort aktiv.
+  const debouncedRecompute = debounce(() => {
+    updateSumIndicator();
+    renderSplitSettlements();
+  }, 150);
+
+  card.querySelectorAll('.pct-input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const id = e.target.dataset.member;
+      const v = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+      trip.percentages[id] = v;
+      saveTrip();
+      // Sofortiges Feedback nur für die getippte Zeile
+      const row = card.querySelector(`[data-row="${id}"] .body .s`);
+      if (row) row.textContent = `trägt ${money(totalSpent() * v / 100)}`;
+      debouncedRecompute();
+    });
+  });
+
+  updateSumIndicator();
+  renderSplitSettlements();
+}
+
+function updateSumIndicator() {
+  const pcts = effectivePercentages();
+  const sum = Object.values(pcts).reduce((a, b) => a + (Number(b) || 0), 0);
+  const ind = $('#sum-indicator');
+  const rounded = Math.round(sum * 10) / 10;
+  if (Math.abs(sum - 100) < 0.5) {
+    ind.innerHTML = `Summe: 100% ✓`;
+    ind.classList.remove('invalid');
+  } else {
+    ind.innerHTML =
+      `Summe: ${rounded}% — sollte 100% sein ` +
+      `<button id="auto-normalize-btn" class="auto-norm-btn">Auto-normalisieren</button>`;
+    ind.classList.add('invalid');
+    $('#auto-normalize-btn').addEventListener('click', autoNormalize);
+  }
+}
+
+function autoNormalize() {
+  const pcts = { ...trip.percentages };
+  const sum = Object.values(pcts).reduce((a, b) => a + (Number(b) || 0), 0);
+  if (sum === 0) {
+    trip.percentages = equalPercentages();
+  } else {
+    const factor = 100 / sum;
+    const out = {};
+    for (const [id, v] of Object.entries(pcts)) out[id] = +(v * factor).toFixed(2);
+    // Rundungs-Korrektur, sodass exakt 100
+    const ns = Object.values(out).reduce((a, b) => a + b, 0);
+    if (trip.members.length > 0) {
+      out[trip.members[0].id] = +(out[trip.members[0].id] + (100 - ns)).toFixed(2);
+    }
+    trip.percentages = out;
+  }
+  saveTrip();
+  renderSplitScreen();
+}
+
+function renderSplitSettlements() {
+  const card = $('#settlements-card');
+  if (trip.expenses.length === 0) {
+    card.innerHTML = '<div class="empty">Noch keine Ausgaben.</div>';
+    return;
+  }
+  const settlements = simplify(balances());
+  if (settlements.length === 0) {
+    card.innerHTML = '<div class="empty">Alle quitt. ✨</div>';
+    return;
+  }
+  const nameOf = id => (trip.members.find(m => m.id === id) || { name: '?' }).name;
+  card.innerHTML = settlements.map(s => `
+    <div class="row">
+      <div class="icon ic-peach">${nameOf(s.from).charAt(0).toUpperCase()}</div>
+      <div class="body">
+        <div class="t">${escapeHtml(nameOf(s.from))} → ${escapeHtml(nameOf(s.to))}</div>
+        <div class="s">Vorgeschlagene Zahlung</div>
+      </div>
+      <div class="amt">${money(s.amt)}</div>
+    </div>
+  `).join('');
+}
+
+function openSplitScreen() {
+  // Initialize percentages if missing/stale
+  const valid = trip.members.length > 0 &&
+    trip.members.every(m => typeof trip.percentages[m.id] === 'number');
+  if (!valid) {
+    trip.percentages = equalPercentages();
+    saveTrip();
+  }
+  renderSplitScreen();
+  $('#split-screen').classList.add('show');
+}
+
+function closeSplitScreen() {
+  $('#split-screen').classList.remove('show');
+}
+
+function equalizeSplit() {
+  trip.percentages = equalPercentages();
+  saveTrip();
+  renderSplitScreen();
+}
+
+function renderExpenses() {
+  const card = $('#expenses-card');
+  if (trip.expenses.length === 0) {
+    card.innerHTML = '<div class="empty">Tippe auf <strong>＋ Ausgabe</strong> unten rechts.</div>';
+    return;
+  }
+  const nameOf = id => (trip.members.find(m => m.id === id) || { name: '?' }).name;
+  const sorted = [...trip.expenses].sort((a, b) => b.date - a.date);
+  card.innerHTML = sorted.map(e => `
+    <div class="row">
+      <div class="icon ic-mint">€</div>
+      <div class="body">
+        <div class="t">${escapeHtml(e.desc || 'Ausgabe')}</div>
+        <div class="s">${escapeHtml(nameOf(e.payer))} · ${formatDate(e.date)}</div>
+      </div>
+      <div class="amt">${money(e.amount)}</div>
+      <button class="del" data-rm-exp="${e.id}">✕</button>
+    </div>
+  `).join('');
+  card.querySelectorAll('[data-rm-exp]').forEach(b => {
+    b.addEventListener('click', () => removeExpense(b.dataset.rmExp));
+  });
+}
+
+function removeExpense(id) {
+  trip.expenses = trip.expenses.filter(e => e.id !== id);
+  saveTrip();
+  renderAll();
+}
+
+function renderAll() {
+  renderMembers();
+  renderTotalCard();
+  renderExpenses();
+  if ($('#split-screen').classList.contains('show')) renderSplitScreen();
+}
+
+// ───── Modal ─────
+function openExpenseModal() {
+  if (trip.members.length === 0) {
+    alert('Erst mindestens eine Person hinzufügen.');
+    return;
+  }
+  $('#exp-amount').value = '';
+  $('#exp-desc').value   = '';
+  const sel = $('#exp-payer');
+  sel.innerHTML = trip.members.map(m =>
+    `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  $('#expense-modal').classList.add('show');
+  setTimeout(() => $('#exp-amount').focus(), 50);
+}
+
+function closeExpenseModal() {
+  $('#expense-modal').classList.remove('show');
+}
+
+function saveExpense() {
+  const amount = parseFloat($('#exp-amount').value.replace(',', '.'));
+  if (!amount || amount <= 0) {
+    $('#exp-amount').focus();
+    return;
+  }
+  trip.expenses.push({
+    id: uid(),
+    payer: $('#exp-payer').value,
+    amount,
+    desc: $('#exp-desc').value.trim(),
+    date: Date.now(),
+  });
+  saveTrip();
+  closeExpenseModal();
+  renderAll();
+}
+
+$('#add-expense-btn').addEventListener('click', openExpenseModal);
+$('#exp-cancel').addEventListener('click', closeExpenseModal);
+$('#exp-save').addEventListener('click', saveExpense);
+$('#open-split-btn').addEventListener('click', openSplitScreen);
+$('#close-split-btn').addEventListener('click', closeSplitScreen);
+$('#equal-split-btn').addEventListener('click', equalizeSplit);
+$('#expense-modal').addEventListener('click', e => {
+  if (e.target.id === 'expense-modal') closeExpenseModal();
+});
+
+// Trip name
+$('#trip-name').value = trip.name;
+$('#trip-name').addEventListener('change', e => {
+  trip.name = e.target.value.trim() || 'Mein Trip';
+  saveTrip();
+});
+
+$('#reset-trip').addEventListener('click', () => {
+  if (!confirm('Alle Ausgaben löschen?')) return;
+  trip.expenses = [];
+  saveTrip();
+  renderAll();
+});
+
+// ───── Trip Export / Import ─────
+$('#trip-export-btn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(trip, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (trip.name || 'trip').replace(/[^A-Za-z0-9_-]+/g, '_');
+  a.href = url;
+  a.download = `better-been-${safeName}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+$('#trip-import-btn').addEventListener('click', () => {
+  $('#import-json').value = '';
+  $('#import-modal').classList.add('show');
+  setTimeout(() => $('#import-json').focus(), 50);
+});
+$('#import-cancel').addEventListener('click', () => $('#import-modal').classList.remove('show'));
+$('#import-modal').addEventListener('click', e => {
+  if (e.target.id === 'import-modal') $('#import-modal').classList.remove('show');
+});
+$('#import-save').addEventListener('click', () => {
+  const raw = $('#import-json').value.trim();
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed.members || !Array.isArray(parsed.members)) throw new Error('Kein gültiger Trip (members fehlen)');
+    if (!parsed.expenses || !Array.isArray(parsed.expenses)) throw new Error('Kein gültiger Trip (expenses fehlen)');
+    trip = {
+      name: parsed.name || 'Importierter Trip',
+      members: parsed.members,
+      expenses: parsed.expenses,
+      percentages: parsed.percentages || {},
+    };
+    saveTrip();
+    $('#trip-name').value = trip.name;
+    $('#import-modal').classList.remove('show');
+    renderAll();
+  } catch (err) {
+    alert('Import fehlgeschlagen: ' + err.message);
+  }
+});
+
+// ───── Helpers ─────
+function money(eur) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(eur);
+}
+function formatDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+// Initial render
+renderAll();
+</script>
+
+</body>
+</html>
